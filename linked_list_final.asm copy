@@ -1,0 +1,155 @@
+#  Linked structures in assembler       D. Hemmendinger  24 January 2009
+#  Linked structures in assembler       J. Rieffel 15 February 2011
+#  Hope Crisafi
+# (removed dependance on in-line constant definitions)
+#  This program builds a heap as a singly-linked list of nodes that
+#  are then used to build a singly-linked list of numbers.
+#       mknodes: builds a linked list of free nodes from an 
+#                 unstructured heap space. 
+#       new:    (you complete it) returns a node from the free list
+#       insert: (you write) inserts an integer into a linked list, in order.
+#       print:  (you write) traverses a list and prints its contents neatly
+
+
+## System calls
+PR_INT = 1
+PR_STR = 4
+
+## Node structure
+NEXT     = 0                    ## offset to next pointer
+DATA     = 4                    ## offset to data
+DATASIZE = 4
+NODESIZE = 8    ##DATA + DATASIZE       bytes per node
+NUMNODES = 15
+HEAPSIZE = 120  ##NODESIZE*NUMNODES
+NIL      = 0                    ## for null pointer
+
+        .data
+input: .word 5, 4, 3, 2, 1  ## you add more numbers here  (no more than NUMNODES)
+inp_end:
+INSIZE = 1 #(inp_end - input)/4    # number of input array elements
+
+heap:   .space  HEAPSIZE
+spce:   .asciiz "  "
+
+        .align 2
+        .text
+main:   addi $sp, $sp, -4
+        sw $ra, 0($sp)
+        li $s7, NIL
+        la $a0, heap
+        li $a1, HEAPSIZE
+        li $a2, NODESIZE 
+        jal mknodes
+
+        la $s0, input
+        la $s1, inp_end
+
+        lw $a0, 0($s0)
+        move $a2, $v0
+        move $a1, $s7
+
+        jal insert
+
+        add $s2, $0, 1
+        loop:
+        sll $s3, $s2, 2
+        add $s3, $s0, $s3
+        lw $a0, 0($s3)
+        move $a2, $v1
+        move $a1, $v0
+        beq $a0, $s7, done
+        jal insert
+        addi $s2, $s2, 1
+        j loop
+
+
+done:   move $a0, $v0
+        jal print
+        lw $ra, 0($sp)
+        addi $sp, $sp, 4
+        jr $ra
+
+mknodes:
+        add $t0, $a0, $a1
+        sub $t0, $t0, $a2
+        move  $v0, $t0 
+mkloop: sub $t1, $t0, $a2
+        sw  $t1, NEXT($t0)
+        move $t0, $t1
+        bne $t0, $a0, mkloop
+        sw $s7, NEXT($t1)
+        jr $ra
+
+new:
+    addi $sp, $sp, -8 
+    sw $ra, 4($sp)
+    lw $t0, 0($a0)
+    beq $t0, $zero, return_nil
+    move $v0, $a0 
+    lw $v1, 0($t0)
+    lw $t1, 4($a0)
+    sw $t0, 4($v0)
+    sw $t1, 0($a0)
+    j return_done
+return_nil:
+    move $v0, $zero
+    move $v1, $zero
+return_done:
+    lw $ra, 4($sp)
+    addi $sp, $sp, 8
+    jr $ra
+
+insert:
+    addi $sp, $sp, -8
+    sw $ra, 0($sp)
+    sw $a0, 4($sp)
+    move $a0, $a2
+    jal new
+    lw $a0, 4($sp)
+    move $t0, $v0
+    sw $a0, DATA($t0)
+    beq $a1, $s7, body
+    lw $t1, DATA($a1)
+    ble $t1, $a0, else
+body:
+    sw $a1, NEXT($t0)
+    move $a1, $t0
+    j insdone
+else:
+    move $t2, $a1
+while:
+    lw $t3, NEXT($t2)
+    beq $t3, $s7, ewhile
+    lw $t4, DATA($t3)
+    blt $a0, $t4, ewhile
+    move $t2, $t3
+    j while
+ewhile:
+    lw $t5, NEXT($t2)
+    sw $t5, NEXT($t0)
+    sw $t0, NEXT($t2)
+insdone:
+    move $v0, $a1
+    lw $ra, 0($sp)
+    addi $sp, $sp, 8
+    jr $ra
+
+
+print:
+    move $t0, $a0 
+    j print_test
+
+print_node:
+    lw $t1, DATA($t0)
+    move $a0, $t1
+    li $v0, PR_INT
+    syscall
+    li $v0, PR_STR
+    la $a0, spce
+    syscall
+    lw $t0, NEXT($t0)
+
+print_test:
+    bne $t0, $s7, print_node
+    jr $ra
